@@ -1,0 +1,34 @@
+{
+  "name": "@doctors/diy",
+  "version": "0.0.37",
+  "description": "",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "dev": "father dev",
+    "build": "father build",
+    "build:deps": "father prebundle",
+    "check": "father doctor",
+    "deploy": "pnpm publish",
+    "prepublishOnly": "father doctor && npm run build"
+  },
+  "repository": "https://github.com/FE-Struggler/doctor",
+  "keywords": [],
+  "authors": [
+    "洋"
+  ],
+  "license": "MIT",
+  "files": [
+    "./dist",
+    "./bin"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@doctors/core": "workspace:^",
+    "@doctors/npm-pkg": "workspace:^",
+    "@doctors/web-tools": "workspace:^",
+    "doctors-yang-author": "^0.0.6"
+  }
+}

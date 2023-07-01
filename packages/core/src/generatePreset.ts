@@ -1,14 +1,12 @@
 import { ApplyPluginsType } from "@umijs/core/dist/types";
 import { applyConfigFromSchema } from "./config";
-import { DoctorLevel, IApi } from "./types";
-import { applyTypeEffect } from "./utils";
-import { logger } from "@umijs/utils";
+import { DoctorLevel, IApi, RuleResItem } from "./types";
+import {
+  applyTypeEffect,
+  toUpperUnderscore,
+  mergeObjectsByProp,
+} from "./utils";
 import { chalk } from "@umijs/utils";
-export interface ruleResItem {
-  label: string;
-  description: string;
-  doctorLevel: DoctorLevel;
-}
 
 function transformString(str: string) {
   const parts = str.split("-");
@@ -18,7 +16,7 @@ function transformString(str: string) {
   return capitalizedParts.join("");
 }
 
-function sort(webToolsRes: ruleResItem[]) {
+function sort(webToolsRes: RuleResItem[]) {
   return webToolsRes.sort((a, b) => {
     if (a.doctorLevel === b.doctorLevel) {
       return 0;
@@ -41,14 +39,28 @@ function sort(webToolsRes: ruleResItem[]) {
   });
 }
 
-export default function (
-  api: IApi,
-  command: string,
-  schema: Object,
-  meta: Object
-) {
+interface GeneratePresetProps {
+  api: IApi;
+  command: string;
+  schema?: Object;
+  meta?: Object;
+}
+
+export default function generatePreset({
+  api,
+  schema,
+  command,
+  meta,
+}: GeneratePresetProps) {
+  api.describe({
+    key: `doctor-generate-preset-fn-${command}`,
+  });
   applyTypeEffect(api, transformString(command));
-  applyConfigFromSchema(api, schema);
+
+  if (schema) {
+    applyConfigFromSchema(api, schema);
+  }
+
   api.registerCommand({
     name: command,
     description: "start incremental build in watch mode",
@@ -59,55 +71,104 @@ export default function (
         type: ApplyPluginsType.add,
       });
 
-      //----------------- checking ------------------
-      const webToolsRes = (
-        await api.applyPlugins({
-          key: `addDoctor${transformString(command)}Check`,
-          type: ApplyPluginsType.add,
-          args: meta,
-        })
-      ).filter(Boolean);
-
-      sort(webToolsRes.filter(Boolean)).forEach((i, index) => {
-        switch (i?.doctorLevel) {
-          case DoctorLevel.SUCCESS:
-            console.log(
-              `${chalk.green("pass🎉🎉")}  Doctor rules ${index}: ${
-                i.label
-              }\n${chalk.green("Suggestion:")}  ${i.description} \n`
-            );
-            break;
-          case DoctorLevel.WARN:
-            console.log(
-              `${chalk.yellowBright("warn")}  Doctor rules ${index}: ${
-                i.label
-              }\n${chalk.yellowBright("Suggestion:")}  ${i.description} \n`
-            );
-            break;
-          case DoctorLevel.ERROR:
-            console.log(
-              `${chalk.red("error!!")}  Doctor rules ${index}: ${
-                i.label
-              }\n${chalk.red("Suggestion:")}  ${i.description} \n`
-            );
-            break;
-          default:
-            break;
-        }
-      });
-      if (webToolsRes.some((i) => i.doctorLevel === DoctorLevel.ERROR)) {
-        logger.info(`${command} End`);
-        await api.applyPlugins({
-          key: `addDoctor${transformString(command)}CheckEnd`,
-          type: ApplyPluginsType.add,
+      if (process.env.IS_DIY_PRESET !== "true") {
+        const { spinner: load } = await import("@astrojs/cli-kit");
+        //----------------- checking ------------------
+        await load({
+          start: "Doctor Rule Checking",
+          end: "Check end",
+          while: () => {
+            return new Promise(async (resolve) => {
+              CheckingAndEnd({
+                api,
+                command,
+                meta,
+                resolve,
+                animationFn: () =>
+                  new Promise((res) => {
+                    setTimeout(() => {
+                      res(void 0);
+                    }, 1000);
+                  }),
+                delayFn: () =>
+                  new Promise((res) => {
+                    setTimeout(() => {
+                      res(void 0);
+                    }, 100);
+                  }),
+              });
+            });
+          },
         });
-        process.exit(1);
+      } else {
+        CheckingAndEnd({ api, command, meta });
       }
-      //----------------- check end ------------------
-      await api.applyPlugins({
-        key: `addDoctor${transformString(command)}CheckEnd`,
-        type: ApplyPluginsType.add,
-      });
     },
+  });
+}
+
+async function CheckingAndEnd({
+  api,
+  command,
+  meta,
+  resolve = (res: undefined) => {},
+  animationFn = async () => {},
+  delayFn = async () => {},
+}) {
+  //----------------- checking ------------------
+  const checkedResult = (
+    await api.applyPlugins({
+      key: `addDoctor${transformString(command)}Check`,
+      type: ApplyPluginsType.add,
+      args: meta,
+    })
+  ).filter(Boolean);
+
+  // for cli animation
+  await animationFn();
+  resolve(void 0);
+
+  // for delay output end 100 ms
+  await delayFn();
+
+  const mergedRes = sort(mergeObjectsByProp(checkedResult.filter(Boolean)));
+  mergedRes.forEach((rule, index) => {
+    console.log(
+      chalk.greenBright(
+        `${chalk.greenBright(
+          `${index++ < 10 ? "0" + index++ : index++}. ${toUpperUnderscore(
+            rule.label
+          )}`
+        )}\n`
+      )
+    );
+    rule.descriptions.forEach((i) => {
+      switch (i?.level) {
+        case DoctorLevel.SUCCESS:
+          console.log(`${chalk.bgGreenBright(" DoctorLevel SUCCESS 🎉🎉 ")}`);
+          console.log(`${chalk.greenBright(" WHY ")}${i.suggestion} \n`);
+          break;
+        case DoctorLevel.WARN:
+          console.log(`${chalk.bgYellowBright("DoctorLevel WARN ")}`);
+          console.log(`${chalk.greenBright(" SUGGESTION ")}${i.suggestion} \n`);
+          break;
+        case DoctorLevel.ERROR:
+          console.log(`${chalk.bgRedBright(" DoctorLevel Error ")}`);
+          console.log(`${chalk.greenBright(" SUGGESTION ")}${i.suggestion} \n`);
+          break;
+        default:
+          break;
+      }
+    });
+  });
+
+  //----------------- check end ------------------
+  if (mergedRes.some((i) => i.doctorLevel === DoctorLevel.ERROR)) {
+    process.exit(1);
+  }
+
+  await api.applyPlugins({
+    key: `addDoctor${transformString(command)}CheckEnd`,
+    type: ApplyPluginsType.add,
   });
 }

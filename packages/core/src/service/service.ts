@@ -12,15 +12,14 @@ export class Service extends CoreService {
     if (appRoot) {
       cwd = path.isAbsolute(appRoot) ? appRoot : path.join(cwd, appRoot);
     }
+
     super({
       ...opts,
       env: process.env.NODE_ENV,
       cwd,
       defaultConfigFiles: DEFAULT_CONFIG_FILES,
       frameworkName: FRAMEWORK_NAME,
-      presets: [
-        ...getDoctorDependencies().map((i) => i.path + "/dist/index.js"),
-      ],
+      presets: [...getDoctorDependencies()],
     });
   }
 

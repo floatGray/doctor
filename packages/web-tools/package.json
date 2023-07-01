@@ -1,6 +1,6 @@
 {
   "name": "@doctors/web-tools",
-  "version": "0.0.5",
+  "version": "0.0.37",
   "description": "",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -8,9 +8,11 @@
     "dev": "father dev",
     "build": "father build",
     "build:deps": "father prebundle",
+    "check": "father doctor",
+    "deploy": "pnpm publish",
     "prepublishOnly": "father doctor && npm run build"
   },
-  "repository": "https://github.com/BoyYangzai/doctor",
+  "repository": "https://github.com/FE-Struggler/doctor",
   "keywords": [],
   "authors": [
     "洋"
@@ -23,10 +25,9 @@
   "publishConfig": {
     "access": "public"
   },
-  "peerDependencies": {
-    "@doctors/core": "workspace:^"
-  },
   "dependencies": {
+    "@doctors/core": "workspace:^",
+    "@doctors/utils": "workspace:^",
     "@umijs/core": "^4.0.71",
     "@umijs/utils": "^4.0.71"
   }
